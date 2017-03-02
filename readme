@@ -1,0 +1,3 @@
+-console dota_force_right_click_attack 1 -condebug +exec autoexec
+
+console set to open with ;   http://www.quadibloc.com/comp/scan.htm
