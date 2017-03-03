@@ -7,7 +7,8 @@ import json
 
 import pyautogui as pa
 
-from game_inputs import PressKey, ReleaseKey
+#from game_inputs import PressKey, ReleaseKey
+import game_inputs
 from units import Hero, LaneCreep
 
 logging.basicConfig(level=logging.INFO)
@@ -16,18 +17,27 @@ logger = logging.getLogger(__name__)
 LOG_LOCATION = "C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota"
 LOG_SIGNIFIER = "JSN:"
 
+def delay(func):
+    from functools import wraps
+    @wraps(func)
+    def inner(*args, sleep=1, **kwargs):
+        from time import sleep as slp
+        slp(sleep)
+        return func(*args, **kwargs)
+
+    return inner
+
+
+PressKey = delay(game_inputs.PressKey)
+ReleaseKey = delay(game_inputs.ReleaseKey)
+typewrite = delay(pa.typewrite)
+click = delay(pa.click)
+
 
 class Run(object):
     """
     score: rating of how well the double pull went. judged by fraction of creeps that were double pulled
     """
-    # def __init__(self, hero, timing, lane_creeps, neutral_creeps, score):
-    #     self.id = 1
-    #     self.hero = hero
-    #     self.lane_creeps = lane_creeps
-    #     self.neutral_creeps = neutral_creeps
-    #     self.timing = timing
-    #     self.score = score
     def __init__(self, id):
         self.id = id
         self.log_suffix = datetime.datetime.today().strftime("%Y-%m-%d") + "_run" + str(self.id)
@@ -38,48 +48,50 @@ class Run(object):
         self.damage_spread_lane = 0
 
     def set_logs(self):
-        self.delay(PressKey, 0x27)
-        self.delay(ReleaseKey, 0x27)
-        self.delay(pa.typewrite, "con_logfile_suffix %s" % self.log_suffix)
-        self.delay(PressKey, 0x27, sleep=2)
-        self.delay(ReleaseKey, 0x27)
+        PressKey(0x27)
+        ReleaseKey(0x27)
+        typewrite("con_logfile_suffix %s" % self.log_suffix)
+        PressKey(0x27, sleep=2)
+        ReleaseKey(0x27)
 
     @classmethod
     def launch_game(cls):
         logger.info("Launching Game")
-        cls.delay(cls.click_pic, 'playdota.png')
-        cls.delay(cls.click_pic, 'createlobby.png')
-        cls.delay(cls.click_pic, 'startgame.png')
-        cls.delay(pa.click, 282, 748, delay_secs=10)
-        cls.delay(PressKey, 0x1C, delay_secs=8)
-        cls.delay(ReleaseKey, 0x1C)
-        cls.delay(pa.typewrite, "-startgame")
-        cls.delay(PressKey, 0x1C)
-        cls.delay(ReleaseKey, 0x1C)
+        click_pic = delay(cls.click_pic)
+        click_pic('playdota.png')
+        click_pic('createlobby.png')
+        click_pic('startgame.png')
+        click(282, 748, delay_secs=10)
+        PressKey(0x1C, delay_secs=8)
+        ReleaseKey(0x1C)
+        typewrite("-startgame")
+        PressKey(0x1C)
+        ReleaseKey(0x1C)
 
     @classmethod
     def leave_game(cls):
         logger.info("Leaving Game")
-        cls.delay(PressKey, 0x27)
-        cls.delay(ReleaseKey, 0x27)
-        cls.delay(pa.typewrite, "disconnect")
-        cls.delay(PressKey, 0x1C)
-        cls.delay(ReleaseKey, 0x1C)
-        cls.delay(PressKey, 0x27)
-        cls.delay(ReleaseKey, 0x27)
-        cls.delay(cls.click_pic, 'leave.png', delay_secs=2)
-        cls.delay(cls.click_pic, 'leave_confirm.png')
+        click_pic = delay(cls.click_pic)
+        PressKey(0x27)
+        ReleaseKey(0x27)
+        typewrite("disconnect")
+        PressKey(0x1C)
+        ReleaseKey(0x1C)
+        PressKey(0x27)
+        ReleaseKey(0x27)
+        click_pic('leave.png', delay_secs=2)
+        click_pic('leave_confirm.png')
 
     @classmethod
     def dump_console(cls):
         logger.info("Dumping console")
-        cls.delay(PressKey, 0x27)
-        cls.delay(ReleaseKey, 0x27)
-        cls.delay(pa.typewrite, "condump")
-        cls.delay(PressKey, 0x1C)
-        cls.delay(ReleaseKey, 0x1C)
-        cls.delay(PressKey, 0x27)
-        cls.delay(ReleaseKey, 0x27)
+        PressKey(0x27)
+        ReleaseKey(0x27)
+        typewrite("condump")
+        PressKey(0x1C)
+        ReleaseKey(0x1C)
+        PressKey(0x27)
+        ReleaseKey(0x27)
 
 
     # def get_results():
