@@ -1,14 +1,14 @@
 import datetime
+import json
+import logging
 import os
 import re
 import time
-import logging
-import json
 
 import pyautogui as pa
 
-#from game_inputs import PressKey, ReleaseKey
 import game_inputs
+from neural_net import NeuralNet, Result
 from units import Hero, LaneCreep
 
 logging.basicConfig(level=logging.INFO)
@@ -33,6 +33,38 @@ ReleaseKey = delay(game_inputs.ReleaseKey)
 typewrite = delay(pa.typewrite)
 click = delay(pa.click)
 
+
+class Loop():
+    """
+    Task: Description of behaviour trying to learn. i.e. doublepull
+    """
+    def __init__(self, task, parameter_names, db, max_runs):
+        self.task = task
+        self.neural_net = NeuralNet(parameter_names)
+        self.run = None
+        self.db = db
+        self.max_runs = max_runs
+
+    def go(self):
+        run_counter = 0
+        while run_counter < self.max_runs:
+            run_counter += 1
+            self.run = Run(run_counter)
+            print("Hi")
+            #self.run.launch_game()
+            #self.run.set_logs()  # Shouldnt matter that this occurs after game launch. I only care about logs around pull
+            #time.sleep(5)
+            #run.get_results()
+            #self.run.dump_console()
+            #time.sleep(5)
+            # At this point the bot script sends the new result to database
+            # self.run.leave_game()  # ASYNCIO time?
+            result = Result(self.db.get_run(self.task, self.run.id))
+            self.neural_net.add_result(result)
+            self.neural_net.update_hidden()
+            self.neural_net.update_weights()
+            self.neural_net.update_params()
+            #self.run.read_log()  # TODO this bit can be async whilst we are starting the next game
 
 class Run(object):
     """
@@ -99,7 +131,7 @@ class Run(object):
 
     @staticmethod
     def get_coords_pic(picname):
-        return pa.locateOnScreen(os.getcwd() + '\\' + picname)
+        return pa.locateOnScreen(os.getcwd() + '\\button_images\\' + picname)
 
     @classmethod
     def click_pic(cls, picname):

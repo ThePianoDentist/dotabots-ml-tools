@@ -1,5 +1,5 @@
 #TODO GetLastAttackTime() this will have minor impacts
-
+# TODO have a more general Unit that creep and hero inherit from as they share quite a few variables
 class Hero(object):
     def __init__(self, data):
         self.name = data.name
