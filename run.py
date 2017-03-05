@@ -36,14 +36,13 @@ class Loop():
             run_counter += 1
             self.run = Run(run_counter)
             print("Hi")
-            #self.run.launch_game()
+            self.run.launch_game()
             #self.run.set_logs()  # Shouldnt matter that this occurs after game launch. I only care about logs around pull
-            #time.sleep(5)
-            #run.get_results()
-            #self.run.dump_console()
-            #time.sleep(5)
-            # At this point the bot script sends the new result to database
-            # self.run.leave_game()  # ASYNCIO time?
+            time.sleep(5)
+            self.run.dump_console()
+            time.sleep(5)
+            #At this point the bot script sends the new result to database
+            self.run.leave_game()  # ASYNCIO time?
             result = Result(self.db.get_run(self.task, self.run.id))
             self.neural_net.add_result(result)
             self.neural_net.update_hidden()
@@ -55,13 +54,7 @@ class Run(object):
     """
     score: rating of how well the double pull went. judged by fraction of creeps that were double pulled
     """
-    # def __init__(self, hero, timing, lane_creeps, neutral_creeps, score):
-    #     self.id = 1
-    #     self.hero = hero
-    #     self.lane_creeps = lane_creeps
-    #     self.neutral_creeps = neutral_creeps
-    #     self.timing = timing
-    #     self.score = score
+
     def __init__(self, id):
         self.id = id
         self.log_suffix = datetime.datetime.today().strftime("%Y-%m-%d") + "_run" + str(self.id)
@@ -115,10 +108,6 @@ class Run(object):
         cls.delay(PressKey, 0x27)
         cls.delay(ReleaseKey, 0x27)
 
-
-    # def get_results():
-    #     return
-
     @staticmethod
     def get_coords_pic(picname):
         return pa.locateOnScreen(os.getcwd() + '\\button_images\\' + picname)
@@ -134,9 +123,8 @@ class Run(object):
     @staticmethod
     def delay(func, *args, **kwargs):
         secs = kwargs.pop("delay_secs", 1)
-        for i in range(secs):
-            print("Sleep %s" % (i + 1))
-            time.sleep(1)
+        logger.info("Sleeping for %s seconds" % secs)
+        time.sleep(secs)
         return func(*args, **kwargs)
 
     def read_log(self):

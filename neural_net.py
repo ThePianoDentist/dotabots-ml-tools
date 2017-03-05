@@ -16,7 +16,7 @@ class Result:
     Result expects dictionary as input
     """
     def __init__(self, result_dict):
-
+        # TODO add incoming damage stuff?
         # These are proportionality factors not actual values
         self.hero_movespeed = result_dict["hero_movespeed"]
         self.hero_attackspeed = result_dict["hero_attackspeed"]
@@ -87,14 +87,21 @@ class NeuralNet:
         self.output = [] # TODO does a simple 0, 1 for success/failure make sense when you can fail from being too late, or too early?
         self.hidden = []  # Dont use as property. would lead to recalculating hidden for error() and update_weights()
         numpy.random.seed(1)  # Makes random number distribution the same over different runs. helps with testing (program_change = your_change)
+        numpy.random.seed(1)  # Makes random number distribution the same over different runs. helps with testing (program_change = your_change)
         self.weights = 2 * numpy.random.random((self.num_inputs, 1)) - 1
+        self.hidden_layers = 1  # currently just doing simple. if this going to be a tool for other people to use. probably want to allow them to specify style of net
+        self.nodes_per_layer = len(parameter_names)  # For multilayer nets...do you have same node num in each layer?
+
+        """
+        http://stats.stackexchange.com/questions/181/how-to-choose-the-number-of-hidden-layers-and-nodes-in-a-feedforward-neural-netw
+        In sum, for most problems, one could probably get decent performance (even without a second optimization step)
+         by setting the hidden layer configuration using just two rules: (i) number of hidden layers equals one; and
+        (ii) the number of neurons in that layer is the mean of the neurons in the input and output layers.
+        """
 
     def add_result(self, new_result):
-        print(self.input)
         self.input.append(new_result.input)   # TODO is append the best thing here?
-        print(self.input)
         self.output.append(new_result.output)
-        #self.weights = numpy.append(self.weights, [0])  # TODO what should this value be?
         # Don't need to update hidden as update_hidden will be called setting it to new length. Should I explicitly block this though?
 
     def update_hidden(self):
@@ -144,7 +151,7 @@ class NeuralNet:
             # return re.sub('(params\[[\'"]p_%s[\'"]\]\s?=).*?( --dynamic)' % parameter_name, r'\1%s\2' % new_value,
             #               contents)
             return re.sub('(params\[[\'"]p_%s[\'"]\]\s?=).*?( --dynamic)' % parameter_name,
-                          r'params["%s"] = %s --dynamic' % (parameter_name, new_value),
+                          r'params["p_%s"] = %s --dynamic' % (parameter_name, new_value),
                           contents)
         else:
             logger.warning("Regex replace for %s failed" % parameter_name)
