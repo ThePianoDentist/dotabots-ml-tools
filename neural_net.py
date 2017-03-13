@@ -23,50 +23,26 @@ class Result:
         self.hero_attackrange = result_dict["hero_attackrange"]
         self.hero_attackdamage = result_dict["hero_attackdamage"]
 
-        self.fraction_neutrals_left = result_dict["fraction_neutrals_left"]
-        self.neutral_total_hp = result_dict["neutral_total_hp"]  # use effective hp?
-        self.neutral_most_targeted_hp = result_dict["neutral_most_targeted_hp"]
+        self.fraction_neutral_left = result_dict["fraction_neutral_left"]
+        self.neutral_total_eff_hp = result_dict["neutral_total_eff_hp"]  # use effective hp?
+        self.targeted_neutral_eff_hp = result_dict["targeted_neutral_eff_hp"]
 
-        self.num_lane_creeps = result_dict["num_lane_creeps"]
-        self.lane_creeps_total_hp = result_dict["lane_creeps_total_hp"]
-        self.lane_creeps_most_targeted_hp = result_dict["lane_creeps_most_targeted_hp"]
+        self.fraction_lane_left = result_dict["fraction_lane_left"]
+        self.lane_total_eff_hp = result_dict["lane_total_eff_hp"]
+        self.targeted_lane_eff_hp = result_dict["targeted_lane_eff_hp"]
 
         self.damage_spread_neutral = result_dict["damage_spread_neutral"]
         self.damage_spread_lane = result_dict["damage_spread_lane"]
 
         # Outputs
         self.success = result_dict["success"]
-    # def __init__(self, hero_movespeed, hero_attackspeed, hero_attackrange, hero_attackdamage, fraction_neutrals_left,
-    #              neutral_total_hp, neutral_most_targeted_hp, num_lane_creeps, lane_creeps_total_hp,
-    #              lane_creeps_most_targeted_hp, damage_spread_neutral, damage_spread_lane, success
-    #              ):
-    #
-    #     # These are proportionality factors not actual values
-    #     self.hero_movespeed = hero_movespeed
-    #     self.hero_attackspeed = hero_attackspeed
-    #     self.hero_attackrange = hero_attackrange
-    #     self.hero_attackdamage = hero_attackdamage
-    #
-    #     self.fraction_neutrals_left = fraction_neutrals_left
-    #     self.neutral_total_hp = neutral_total_hp  # use effective hp?
-    #     self.neutral_most_targeted_hp = neutral_most_targeted_hp
-    #
-    #     self.num_lane_creeps = num_lane_creeps
-    #     self.lane_creeps_total_hp = lane_creeps_total_hp
-    #     self.lane_creeps_most_targeted_hp = lane_creeps_most_targeted_hp
-    #
-    #     self.damage_spread_neutral = damage_spread_neutral
-    #     self.damage_spread_lane = damage_spread_lane
-    #
-    #     # Outputs
-    #     self.success = success
 
     @property
     def input(self):
         return numpy.array([
             self.hero_movespeed, self.hero_attackspeed, self.hero_attackrange, self.hero_attackdamage,
-            self.fraction_neutrals_left, self.neutral_total_hp, self.neutral_most_targeted_hp, self.num_lane_creeps,
-            self.lane_creeps_total_hp, self.lane_creeps_most_targeted_hp, self.damage_spread_neutral,
+            self.fraction_neutral_left, self.neutral_total_eff_hp, self.targeted_neutral_eff_hp, self.fraction_lane_left,
+            self.lane_total_eff_hp, self.targeted_lane_eff_hp, self.damage_spread_neutral,
             self.damage_spread_lane
         ])
 
@@ -79,7 +55,7 @@ class NeuralNet:
     """
     A lot of ideas learnt/taken from http://iamtrask.github.io/2015/07/12/basic-python-network/
     """
-    def __init__(self, parameter_names):
+    def __init__(self, parameter_names, weights=None):
         self.parameter_names = parameter_names
         # These are normal python lists. not numpy arrays. because you cannot nicely make an empty 2d numpy array,
         # then add to it. We will just convert to numpy arrays when necessary
@@ -88,7 +64,7 @@ class NeuralNet:
         self.hidden = []  # Dont use as property. would lead to recalculating hidden for error() and update_weights()
         numpy.random.seed(1)  # Makes random number distribution the same over different runs. helps with testing (program_change = your_change)
         numpy.random.seed(1)  # Makes random number distribution the same over different runs. helps with testing (program_change = your_change)
-        self.weights = 2 * numpy.random.random((self.num_inputs, 1)) - 1
+        self.weights = 2 * numpy.random.random((self.num_inputs, 1)) - 1 if not weights else weights
         self.hidden_layers = 1  # currently just doing simple. if this going to be a tool for other people to use. probably want to allow them to specify style of net
         self.nodes_per_layer = len(parameter_names)  # For multilayer nets...do you have same node num in each layer?
 
@@ -118,6 +94,7 @@ class NeuralNet:
 
     def update_weights(self):
         self.weights += numpy.dot(numpy.array(self.input).T, self.error * self.deriv_sigmoid(self.hidden))
+        logger.debug("Weights updated: %s" % self.weights)
 
     # TODO add a function that terminates on a clause indicating we can't do better and are wasting time looping furhter
     def find_weights(self, iterations):
@@ -145,7 +122,6 @@ class NeuralNet:
     @staticmethod
     def change_script_parameters(contents, parameter_name, new_value):
         # TODO add error handling for if regex does not match
-        #import pdb; pdb.set_trace()
         if re.search('(params\[[\'"]p_%s[\'"]\]\s?=)(.*?)( --dynamic)' % parameter_name, contents):
             # TODO why does this except?
             # return re.sub('(params\[[\'"]p_%s[\'"]\]\s?=).*?( --dynamic)' % parameter_name, r'\1%s\2' % new_value,
@@ -169,6 +145,21 @@ class NeuralNet:
                 if param == "success":  # Finished inputs
                     break
                 contents = self.change_script_parameters(contents, param, self.weights[i][0])
-            f.truncate()
-            f.seek(0)
+            # f.truncate()
+            # f.seek(0)
+            # f.write(contents)
+            # print(contents)
+
+        # Was seeing some weird behaviour with truncate and seek (Added weird line that broke script). so just writing a whole 'new' file
+        with open(FUNCTION_LOCATION, "w+") as f:
             f.write(contents)
+
+    def __str__(self):
+        # TODO can probably make this a fancy one-liner
+        out = ""
+        for i, name in enumerate(self.parameter_names):
+            import pdb; pdb.set_trace()
+            if name == "success":
+                break
+            out += "Name: %s, Weight: %s\n" % (name, self.weights[i])
+        return out

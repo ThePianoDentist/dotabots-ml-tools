@@ -23,30 +23,35 @@ class Loop():
     """
     Task: Description of behaviour trying to learn. i.e. doublepull
     """
-    def __init__(self, task, parameter_names, db, max_runs):
-        self.task = task
-        self.neural_net = NeuralNet(parameter_names)
+    def __init__(self, parameter_names, db, max_runs, starting_weights=None):
+        self.neural_net = NeuralNet(parameter_names, starting_weights)
         self.run = None
         self.db = db
         self.max_runs = max_runs
 
     def go(self):
         run_counter = 0
+        #lets you get mouse over dota
         while run_counter < self.max_runs:
             run_counter += 1
-            self.run = Run(run_counter)
+            self.run = Run(self.db.get_num_results() + 1)
             print("Hi")
-            self.run.launch_game()
-            #self.run.set_logs()  # Shouldnt matter that this occurs after game launch. I only care about logs around pull
-            time.sleep(5)
+            time.sleep(2.5)
+            self.run.start_game()
+            self.run.set_logs()  # Shouldnt matter that this occurs after game launch. I only care about logs around pull
+            self.run.wait_for_pull() # ASYNCIO time?
             self.run.dump_console()
-            time.sleep(5)
+            self.run.restart()
+            self.run.delay(pa.click, 282, 748, delay_secs=3)  # click the skip button
             #At this point the bot script sends the new result to database
-            self.run.leave_game()  # ASYNCIO time?
-            result = Result(self.db.get_run(self.task, self.run.id))
+            new_result = self.run.read_log()
+            self.db.add_run(self.run.id, new_result)
+            time.sleep(0.01)  # this is only because I expected game to send result to elastic search. not python
+            result = Result(self.db.get_run(self.run.id))
             self.neural_net.add_result(result)
             self.neural_net.update_hidden()
             self.neural_net.update_weights()
+            logger.info(str(self.neural_net))
             self.neural_net.update_params()
             #self.run.read_log()  # TODO this bit can be async whilst we are starting the next game
 
@@ -65,11 +70,7 @@ class Run(object):
         self.damage_spread_lane = 0
 
     def set_logs(self):
-        self.delay(PressKey, 0x27)
-        self.delay(ReleaseKey, 0x27)
-        self.delay(pa.typewrite, "con_logfile_suffix %s" % self.log_suffix)
-        self.delay(PressKey, 0x27, delay_secs=2)
-        self.delay(ReleaseKey, 0x27)
+        self.single_log_line("con_logfile_suffix %s" % self.log_suffix)
 
     @classmethod
     def launch_game(cls):
@@ -83,6 +84,37 @@ class Run(object):
         cls.delay(pa.typewrite, "-startgame")
         cls.delay(PressKey, 0x1C)
         cls.delay(ReleaseKey, 0x1C)
+
+    @classmethod
+    def single_log_line(cls, log_string):
+        cls.delay(PressKey, 0x27)
+        ReleaseKey(0x27)
+        cls.delay(pa.typewrite, log_string)
+        cls.delay(cls.click_pic, 'submit.png')  # Pressing enter doesnt seem to work here?
+        cls.delay(PressKey, 0x27)
+        ReleaseKey(0x27)
+        pa.moveRel(25, 25)  # Cannot recognise submit button if cursor still over it
+
+    @classmethod
+    def wait_for_pull(cls):
+        # we can give hero a tp scroll and use image to know when reload
+        logger.info("Waiting for double pull to occur")
+        time.sleep(17)  # TODO this is terrible
+        # while not pa.locateOnScreen(os.getcwd() + '\\button_images\\115.png'):
+        #     time.sleep(0.001)
+        # else:
+        #     logger.info("Found sgnifier. Pull over. Results sent")
+        #     return
+
+    @classmethod
+    def start_game(cls):
+        logger.info("Starting game")
+        cls.single_log_line("dota_start_game")
+
+    @classmethod
+    def restart(cls):
+        logger.info("Restarting game")
+        cls.single_log_line("restart")
 
     @classmethod
     def leave_game(cls):
@@ -100,49 +132,38 @@ class Run(object):
     @classmethod
     def dump_console(cls):
         logger.info("Dumping console")
-        cls.delay(PressKey, 0x27)
-        cls.delay(ReleaseKey, 0x27)
-        cls.delay(pa.typewrite, "condump")
-        cls.delay(PressKey, 0x1C)
-        cls.delay(ReleaseKey, 0x1C)
-        cls.delay(PressKey, 0x27)
-        cls.delay(ReleaseKey, 0x27)
+        cls.single_log_line("condump")
 
     @staticmethod
     def get_coords_pic(picname):
-        return pa.locateOnScreen(os.getcwd() + '\\button_images\\' + picname)
+        return pa.locateCenterOnScreen(os.getcwd() + '\\button_images\\' + picname)
 
     @classmethod
     def click_pic(cls, picname):
         coords = cls.get_coords_pic(picname)
         if not coords:
             raise Exception("Could not find button")
-        pa.center(coords)
-        pa.click(coords[:2])
+        pa.moveTo(coords)
+        time.sleep(2)
+        pa.click(coords)
 
     @staticmethod
     def delay(func, *args, **kwargs):
-        secs = kwargs.pop("delay_secs", 1)
+        secs = kwargs.pop("delay_secs", 0.2)
         logger.info("Sleeping for %s seconds" % secs)
         time.sleep(secs)
         return func(*args, **kwargs)
 
     def read_log(self):
         logger.info("Parsing log file")
-        logfile = "console" + self.log_suffix + ".log"
+        # TODO log suffix isnt working properly now. Am i using it wrong?
+        #logfile = "console" + self.log_suffix + ".log"
+        logfile = "condump%s.txt" % str((self.id - 1)).zfill(3)
         with open(LOG_LOCATION + "\\" + logfile, "r+") as f:
             # print(f.read())
             lines = re.findall("\[VScript\] %s([^\n]+)\n" % LOG_SIGNIFIER, f.read())  # would readlines and a generator be better?
             for line in lines:
                 print(line)
+                return line  # TODO only allowing it to read one line. is this too restrictive?
                 data = json.loads(line)
-                if data.type == "parameter":
-                    # type = "parameters", hero_data = hero_data, lane_creeps = lane_creeps, neutral_creeps = neutral_creeps,
-                    # damage_spread_lane = damage_spread_lane, damage_spread_neutral = damage_spread_neutral
-                    self.hero = Hero(data.hero_data)
-                    self.damage_spread_neutral = data.damage_spread_neutral
-                    self.damage_spread_lane = data.damage_spread_lane
-                    for lc in data.lane_creeps:
-                        self.lane_creeps.append(LaneCreep(lc))
-                    for nc in data.neutral_creeps:
-                        self.neutral_creeps.append(LaneCreep(nc))
+                self.db.index(index=self.task, doc_type="run", id=self.id)
