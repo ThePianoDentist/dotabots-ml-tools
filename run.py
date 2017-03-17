@@ -12,20 +12,20 @@ from neural_net import NeuralNet, Result
 from game_inputs import PressKey, ReleaseKey
 from units import Hero, LaneCreep
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 LOG_LOCATION = "C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\dota"
 LOG_SIGNIFIER = "JSN:"
 
 
-class Loop():
+class Loop:
     """
     Task: Description of behaviour trying to learn. i.e. doublepull
     """
     def __init__(self, parameter_names, db, max_runs, starting_weights=None):
         self.neural_net = NeuralNet(parameter_names, starting_weights)
-        self.run = None
+        self.run_id = None
         self.db = db
         self.max_runs = max_runs
 
@@ -34,24 +34,24 @@ class Loop():
         #lets you get mouse over dota
         while run_counter < self.max_runs:
             run_counter += 1
-            self.run = Run(self.db.get_num_results() + 1)
+            self.run = Run(2)#Run(self.db.get_num_results() + 1)
             print("Hi")
             time.sleep(2.5)
-            self.run.start_game()
-            self.run.set_logs()  # Shouldnt matter that this occurs after game launch. I only care about logs around pull
-            self.run.wait_for_pull() # ASYNCIO time?
-            self.run.dump_console()
-            self.run.restart()
-            self.run.delay(pa.click, 282, 748, delay_secs=3)  # click the skip button
+            # self.run.start_game()
+            # self.run.set_logs()  # Shouldnt matter that this occurs after game launch. I only care about logs around pull
+            # self.run.follow_bot()
+            # self.run.wait_for_pull() # ASYNCIO time?
+            # self.run.dump_console()
+            # self.run.restart()
+            # self.run.delay(pa.click, 282, 748, delay_secs=3)  # click the skip button
             #At this point the bot script sends the new result to database
-            new_result = self.run.read_log()
-            self.db.add_run(self.run.id, new_result)
+            #new_result = self.run.read_log()
+            #self.db.add_run(self.run.id, new_result)
             time.sleep(0.01)  # this is only because I expected game to send result to elastic search. not python
             result = Result(self.db.get_run(self.run.id))
             self.neural_net.add_result(result)
-            self.neural_net.update_hidden()
-            self.neural_net.update_weights()
-            logger.info(str(self.neural_net))
+            self.neural_net.iterate_weights_2(10000)
+            logger.info(self.neural_net)
             self.neural_net.update_params()
             #self.run.read_log()  # TODO this bit can be async whilst we are starting the next game
 
@@ -117,6 +117,13 @@ class Run(object):
         cls.single_log_line("restart")
 
     @classmethod
+    def follow_bot(cls):
+        logger.info("Clicking bot portrait to follow bot")
+        # TODO have these coords depend on what slot bot is in
+        pa.click(744, 103)
+        pa.click(730, 927, clicks=2)
+
+    @classmethod
     def leave_game(cls):
         logger.info("Leaving Game")
         cls.delay(PressKey, 0x27)
@@ -167,3 +174,6 @@ class Run(object):
                 return line  # TODO only allowing it to read one line. is this too restrictive?
                 data = json.loads(line)
                 self.db.index(index=self.task, doc_type="run", id=self.id)
+
+    # TODO add something to pause/stop script if loses focus on dota window.
+    # i.e. stop typing random stuff in the code by accident!

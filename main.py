@@ -11,9 +11,8 @@ def main():
     ]
 
     #starting_weights = [0.0033, -0.85, -0.0015, 0.02, -4, -0.003, 0.003, 1.25, 0.0005, 0, 0, 0]
-    db = DBConnection("doublepull")
-    loop = Loop(parameter_names, db, 100, starting_weights)
+    db = DBConnection("doublepull", 1)
+    loop = Loop(parameter_names, db, 100)
     loop.go()
-
 if __name__ == "__main__":
     main()

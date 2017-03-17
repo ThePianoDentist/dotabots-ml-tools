@@ -5,7 +5,7 @@ import os
 #from scipy.special import expit need blas on pc
 
 import logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 FUNCTION_LOCATION = os.path.normpath("C:/Program Files (x86)/Steam/steamapps/common/dota 2 beta/game/dota/scripts/vscripts/bots/hero_funcs/pulling.lua")
@@ -55,6 +55,7 @@ class NeuralNet:
     """
     A lot of ideas learnt/taken from http://iamtrask.github.io/2015/07/12/basic-python-network/
     """
+    # TODO do I really need so many nodes. can the net be more lightweight?
     def __init__(self, parameter_names, weights=None):
         self.parameter_names = parameter_names
         # These are normal python lists. not numpy arrays. because you cannot nicely make an empty 2d numpy array,
@@ -65,8 +66,14 @@ class NeuralNet:
         numpy.random.seed(1)  # Makes random number distribution the same over different runs. helps with testing (program_change = your_change)
         numpy.random.seed(1)  # Makes random number distribution the same over different runs. helps with testing (program_change = your_change)
         self.weights = 2 * numpy.random.random((self.num_inputs, 1)) - 1 if not weights else weights
-        self.hidden_layers = 1  # currently just doing simple. if this going to be a tool for other people to use. probably want to allow them to specify style of net
+        self.hidden_layers = 2  # currently just doing simple. if this going to be a tool for other people to use. probably want to allow them to specify style of net
         self.nodes_per_layer = len(parameter_names)  # For multilayer nets...do you have same node num in each layer?
+        self.learning_rate = 1
+        if self.hidden_layers == 2:
+            # TODO should probably be tuples rather than these hacky dicts
+            self.hidden = {0: [], 1: []}
+            self.weights = {0: 2 * numpy.random.random((self.num_inputs, self.num_inputs + 1)) - 1,
+                            1: 2 * numpy.random.random((self.num_inputs + 1, 1)) - 1}
 
         """
         http://stats.stackexchange.com/questions/181/how-to-choose-the-number-of-hidden-layers-and-nodes-in-a-feedforward-neural-netw
@@ -80,6 +87,10 @@ class NeuralNet:
         self.output.append(new_result.output)
         # Don't need to update hidden as update_hidden will be called setting it to new length. Should I explicitly block this though?
 
+    def update_hidden_2(self):
+        self.hidden[0] = self.sigmoid(numpy.dot(numpy.array(self.input), self.weights[0]))  # TODO repalce with scipy func
+        self.hidden[1] = self.sigmoid(numpy.dot(numpy.array(self.hidden[0]), self.weights[1]))  # TODO repalce with scipy func
+
     def update_hidden(self):
         self.hidden = self.sigmoid(numpy.dot(numpy.array(self.input), self.weights))  # TODO repalce with scipy func
 
@@ -92,16 +103,37 @@ class NeuralNet:
     def error(self):
         return numpy.array(self.output) - self.hidden
 
-    def update_weights(self):
-        self.weights += numpy.dot(numpy.array(self.input).T, self.error * self.deriv_sigmoid(self.hidden))
-        logger.debug("Weights updated: %s" % self.weights)
+    @property
+    def error_2(self):
+        return numpy.array(self.output) - self.hidden[1]
+
+    # @property
+    # def error_1(self):
+    #     return self.error_2 * l2_delta.dot(numpy.array(self.weights[1]).T)
+    #     return numpy.array(self.output) - self.hidden[0]
+
+    def update_weights_2(self):
+
+        weights_two_shift = self.learning_rate * (numpy.array(self.output) - self.hidden[1]) * self.deriv_sigmoid(self.hidden[1])
+        self.weights[1] += numpy.dot(numpy.array(self.hidden[0]).T, weights_two_shift)
+        self.weights[0] += numpy.dot(numpy.array(self.input).T,
+                                     weights_two_shift * self.deriv_sigmoid(self.hidden[0]))
+        logger.info("Weights updated (0): %s" % self.weights[0])
+        logger.info("Weights updated (1): %s" % self.weights[1])
 
     # TODO add a function that terminates on a clause indicating we can't do better and are wasting time looping furhter
-    def find_weights(self, iterations):
+    def iterate_weights(self, iterations):
         for i in range(iterations):
             self.update_hidden()
             self.update_weights()
-        return self.weights
+        logger.debug("Final error: %s" % str(numpy.mean(numpy.abs(self.error))))
+
+    # TODO add a function that terminates on a clause indicating we can't do better and are wasting time looping furhter
+    def iterate_weights_2(self, iterations):
+        for i in range(iterations):
+            self.update_hidden_2()
+            self.update_weights_2()
+        logger.debug("Final error: %s" % str(numpy.mean(numpy.abs(self.error_2))))
 
     @staticmethod
     def sigmoid(x):
@@ -154,12 +186,14 @@ class NeuralNet:
         with open(FUNCTION_LOCATION, "w+") as f:
             f.write(contents)
 
+    # def __str__(self):
+    #     # TODO can probably make this a fancy one-liner
+    #     out = ""
+    #     for i, name in enumerate(self.parameter_names):
+    #         if name == "success":
+    #             break
+    #         out += "Name: %s, Weight: %s\n" % (name, self.weights[i])
+    #     return out
+
     def __str__(self):
-        # TODO can probably make this a fancy one-liner
-        out = ""
-        for i, name in enumerate(self.parameter_names):
-            import pdb; pdb.set_trace()
-            if name == "success":
-                break
-            out += "Name: %s, Weight: %s\n" % (name, self.weights[i])
-        return out
+        return self.weights
