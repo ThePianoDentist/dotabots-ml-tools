@@ -8,7 +8,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-FUNCTION_LOCATION = os.path.normpath("C:/Program Files (x86)/Steam/steamapps/common/dota 2 beta/game/dota/scripts/vscripts/bots/hero_funcs/pulling.lua")
+FUNCTION_LOCATION = os.path.normpath("C:/Program Files (x86)/Steam/steamapps/common/dota 2 beta/game/dota/scripts/vscripts/bots/neural_net.lua")
 
 
 class Result:
@@ -69,11 +69,13 @@ class NeuralNet:
         self.hidden_layers = 2  # currently just doing simple. if this going to be a tool for other people to use. probably want to allow them to specify style of net
         self.nodes_per_layer = len(parameter_names)  # For multilayer nets...do you have same node num in each layer?
         self.learning_rate = 1
-        if self.hidden_layers == 2:
+        if self.hidden_layers == 2:  # should prob just delete one layer code. trying to make handle layers/node setup dynamic is probably what theanos and kerbaras and stuff for
             # TODO should probably be tuples rather than these hacky dicts
             self.hidden = {0: [], 1: []}
             self.weights = {0: 2 * numpy.random.random((self.num_inputs, self.num_inputs + 1)) - 1,
                             1: 2 * numpy.random.random((self.num_inputs + 1, 1)) - 1}
+
+        self.update_params()
 
         """
         http://stats.stackexchange.com/questions/181/how-to-choose-the-number-of-hidden-layers-and-nodes-in-a-feedforward-neural-netw
@@ -81,6 +83,9 @@ class NeuralNet:
          by setting the hidden layer configuration using just two rules: (i) number of hidden layers equals one; and
         (ii) the number of neurons in that layer is the mean of the neurons in the input and output layers.
         """
+
+        # I think the above saying most problems can use one layer has to be ignored
+        # I dont think its possible to 'learn' against combinations of inputs affecting output with a second layer
 
     def add_result(self, new_result):
         self.input.append(new_result.input)   # TODO is append the best thing here?
@@ -94,7 +99,7 @@ class NeuralNet:
     def update_hidden(self):
         self.hidden = self.sigmoid(numpy.dot(numpy.array(self.input), self.weights))  # TODO repalce with scipy func
 
-    @property
+    @property # TODO probably should be a property if we set it once then never change. overcomplicating stuff to use fancy features for no reason I thinbk.
     def num_inputs(self):
         # Needs updating if we ever have more complex reward systems which ahve multiple output variables
         return len(self.parameter_names) - 1
@@ -118,10 +123,10 @@ class NeuralNet:
         self.weights[1] += numpy.dot(numpy.array(self.hidden[0]).T, weights_two_shift)
         self.weights[0] += numpy.dot(numpy.array(self.input).T,
                                      weights_two_shift * self.deriv_sigmoid(self.hidden[0]))
-        logger.info("Weights updated (0): %s" % self.weights[0])
-        logger.info("Weights updated (1): %s" % self.weights[1])
+        # logger.info("Weights updated (0): %s" % self.weights[0])
+        # logger.info("Weights updated (1): %s" % self.weights[1])
 
-    # TODO add a function that terminates on a clause indicating we can't do better and are wasting time looping furhter
+    # TODO add a function that terminates on;condump a clause indicating we can't do better and are wasting time looping furhter
     def iterate_weights(self, iterations):
         for i in range(iterations):
             self.update_hidden()
@@ -165,6 +170,46 @@ class NeuralNet:
             logger.warning("Regex replace for %s failed" % parameter_name)
             return contents
 
+    @staticmethod
+    def change_script_parameters_weights1_index(contents, index, new_value):
+        lua_index = index + 1  # Lua lists start at 1
+        # TODO add error handling for if regex does not match
+        if re.search('(weights_1\[%s\]\s?=\s?\{)(.*?)(\} --dynamic)' % lua_index, contents):
+            # TODO why does this except?
+            # return re.sub('(params\[[\'"]p_%s[\'"]\]\s?=).*?( --dynamic)' % parameter_name, r'\1%s\2' % new_value,
+            #               contents)
+            return re.sub('(weights_1\[%s\]\s?=\s?\{).*?(\} --dynamic)' % lua_index,
+                          r'weights_1[%s] = {%s} --dynamic' % (lua_index, new_value[index][0]),
+                          contents)
+        else:
+            logger.error("Regex replace for %s failed" % index)
+            return contents
+
+    @staticmethod
+    def change_script_parameters_weights0_index(contents, index, new_values):
+        lua_index = index + 1  # Lua lists start at 1
+        # TODO add error handling for if regex does not match
+        if re.search('(weights_0\[%s\]\s?=\s?\{)(.*?)(\} --dynamic)' % lua_index, contents):
+            # TODO why does this except?
+            # return re.sub('(params\[[\'"]p_%s[\'"]\]\s?=).*?( --dynamic)' % parameter_name, r'\1%s\2' % new_value,
+            #               contents)
+            replacement_str = r'weights_0[%s] = {' % lua_index
+            for weight in new_values[index]:
+                replacement_str += '{%s},' % weight
+            replacement_str += '} --dynamic'
+            return re.sub('(weights_0\[%s\]\s?=\s?\{).*?(\} --dynamic)' % lua_index,
+                          replacement_str,
+                          contents)
+        else:
+            logger.error("Regex replace for %s failed" % lua_index)
+            return contents
+
+    def update_lua_run_num(self, contents):
+        # TODO Add error handling?
+        return re.sub('run = \d+ --dynamic',
+                      'run = %s --dynamic' % (len(self.input) + 1),  # +1 because we want for next run. not for run just gone
+                      contents)
+
     def update_params(self):
         """
         Open lua script file with parameters in and update them for next run
@@ -173,10 +218,12 @@ class NeuralNet:
         """
         with open(FUNCTION_LOCATION, "r+") as f:
             contents = f.read()
-            for i, param in enumerate(self.parameter_names):
-                if param == "success":  # Finished inputs
+            for i in range(13):
+                contents = self.change_script_parameters_weights1_index(contents, i, self.weights[1])
+                if i == 12:
                     break
-                contents = self.change_script_parameters(contents, param, self.weights[i][0])
+                contents = self.change_script_parameters_weights0_index(contents, i, self.weights[0])
+            contents = self.update_lua_run_num(contents)
             # f.truncate()
             # f.seek(0)
             # f.write(contents)
@@ -195,5 +242,8 @@ class NeuralNet:
     #         out += "Name: %s, Weight: %s\n" % (name, self.weights[i])
     #     return out
 
-    def __str__(self):
-        return self.weights
+    # def __str__(self):
+    #     out = ""
+    #     for key, value in self.weights.items():
+    #         out += "k: %s\n%s\n\n" % (key, value)
+    #     return out

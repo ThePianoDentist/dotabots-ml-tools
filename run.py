@@ -34,23 +34,24 @@ class Loop:
         #lets you get mouse over dota
         while run_counter < self.max_runs:
             run_counter += 1
-            self.run = Run(2)#Run(self.db.get_num_results() + 1)
+            self.run = Run(self.db.get_num_results() + 1)
             print("Hi")
             time.sleep(2.5)
-            # self.run.start_game()
-            # self.run.set_logs()  # Shouldnt matter that this occurs after game launch. I only care about logs around pull
-            # self.run.follow_bot()
-            # self.run.wait_for_pull() # ASYNCIO time?
-            # self.run.dump_console()
-            # self.run.restart()
-            # self.run.delay(pa.click, 282, 748, delay_secs=3)  # click the skip button
-            #At this point the bot script sends the new result to database
-            #new_result = self.run.read_log()
-            #self.db.add_run(self.run.id, new_result)
+            self.run.start_game()
+            self.run.set_logs()  # Shouldnt matter that this occurs after game launch. I only care about logs around pull
+            self.run.follow_bot()
+            self.run.wait_for_pull() # ASYNCIO time?
+            self.run.dump_console()
+            self.run.restart()
+            self.run.delay(pa.click, 282, 748, delay_secs=3)  # click the skip button
+            # At this point the bot script sends the new result to database
+            new_result = self.run.read_log()
+            self.db.add_run(self.run.id, new_result)
             time.sleep(0.01)  # this is only because I expected game to send result to elastic search. not python
             result = Result(self.db.get_run(self.run.id))
             self.neural_net.add_result(result)
-            self.neural_net.iterate_weights_2(10000)
+            self.neural_net.iterate_weights_2(100)
+            # print(self.neural_net.weights)
             logger.info(self.neural_net)
             self.neural_net.update_params()
             #self.run.read_log()  # TODO this bit can be async whilst we are starting the next game
@@ -99,7 +100,7 @@ class Run(object):
     def wait_for_pull(cls):
         # we can give hero a tp scroll and use image to know when reload
         logger.info("Waiting for double pull to occur")
-        time.sleep(17)  # TODO this is terrible
+        time.sleep(13)  # TODO this is terrible
         # while not pa.locateOnScreen(os.getcwd() + '\\button_images\\115.png'):
         #     time.sleep(0.001)
         # else:
@@ -156,7 +157,7 @@ class Run(object):
 
     @staticmethod
     def delay(func, *args, **kwargs):
-        secs = kwargs.pop("delay_secs", 0.2)
+        secs = kwargs.pop("delay_secs", 0.1)
         logger.info("Sleeping for %s seconds" % secs)
         time.sleep(secs)
         return func(*args, **kwargs)
