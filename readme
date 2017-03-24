@@ -1,8 +1,10 @@
+example: https://www.youtube.com/watch?v=WwjmDrGnK0w
+
 -console dota_force_right_click_attack 1 -condebug +exec autoexec
 
-console set to open with ;   http://www.quadibloc.com/comp/scan.htm
+console set to open with ; 
 
-python venv:
+very work in progress.
 
-pyautogui
-django
+When finished hopefully database and machine learning scenario will be abstracted away so you can use any db, want to study an dota ML scenario,
+and this framework will set it up easily for you
